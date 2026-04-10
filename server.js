@@ -4,8 +4,6 @@ require('dotenv').config();
 
 const app = express();
 
-const port = 5000;
-
 
 // Middleware pour analyser le JSON des requêtes
 app.use(cors());

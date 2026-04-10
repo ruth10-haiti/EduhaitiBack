@@ -81,19 +81,20 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   const { id } = req.params;
+  const allowedFields = ['nom_classe', 'annee_academique', 'date_inscription', 'dossier_complet'];
   const updates = req.body;
-
+  const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+  if (fields.length === 0) {
+    return res.status(400).json({ message: 'Aucun champ valide à mettre à jour' });
+  }
+  const setClause = fields.map(f => `${f} = ?`).join(', ');
+  const values = fields.map(f => updates[f]);
   try {
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
-    const setClause = fields.map(f => '${f} = ?').join(', ');
     const [result] = await db.query(
-      'UPDATE inscriptions SET ${setClause} WHERE id = ?',
+      `UPDATE inscriptions SET ${setClause} WHERE id = ?`,
       [...values, id]
     );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Inscription non trouvée' });
-    }
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Inscription non trouvée' });
     res.json({ message: 'Inscription mise à jour' });
   } catch (err) {
     console.error(err);

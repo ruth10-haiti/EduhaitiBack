@@ -61,7 +61,106 @@ const sendResetEmail = async (to, token) => {
   }
 };
 
-// ---------- Inscription ----------
+// ---------- NOUVELLE FONCTION register (pour compatibilité frontend) ----------
+exports.register = async (req, res) => {
+  console.log('📝 [register] Corps reçu:', req.body);
+  
+  try {
+    // Extraire les données (supporte les deux formats)
+    let { nom, prenom, email, password, mot_de_passe, role } = req.body;
+    
+    // Gérer le mot de passe (password ou mot_de_passe)
+    const finalPassword = password || mot_de_passe;
+    
+    // Gérer le nom (nom seul ou prenom + nom)
+    let finalNom = nom;
+    if (prenom && nom) {
+      finalNom = `${prenom} ${nom}`;
+    }
+    
+    console.log('📊 Données traitées:', { nom: finalNom, email, role });
+    
+    // Validation
+    if (!finalNom || !email || !finalPassword) {
+      return res.status(400).json({ 
+        error: 'Nom, email et mot de passe sont requis' 
+      });
+    }
+    
+    if (finalPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Le mot de passe doit contenir au moins 6 caractères' 
+      });
+    }
+    
+    // Vérifier si l'email existe déjà
+    const [rows] = await db.query('SELECT id FROM utilisateurs WHERE email = ?', [email]);
+    if (rows.length > 0) {
+      return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+    }
+    
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(finalPassword, 10);
+    
+    // Séparer le nom complet en nom et prénom si nécessaire
+    let nomPart = finalNom;
+    let prenomPart = '';
+    const nameParts = finalNom.split(' ');
+    if (nameParts.length > 1) {
+      prenomPart = nameParts[0];
+      nomPart = nameParts.slice(1).join(' ');
+    } else {
+      prenomPart = finalNom;
+      nomPart = '';
+    }
+    
+    // Insérer l'utilisateur
+    const [result] = await db.query(
+      'INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, email_verifie) VALUES (?, ?, ?, ?, ?, ?)',
+      [nomPart, prenomPart, email, hashedPassword, role || 'parent', false]
+    );
+    
+    // Générer un token de vérification d'email
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const expireDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    
+    await db.query(
+      'INSERT INTO verification_email (id_utilisateur, token, expire_a) VALUES (?, ?, ?)',
+      [result.insertId, verificationToken, expireDate]
+    );
+    
+    // Envoyer l'email de vérification
+    await sendVerificationEmail(email, verificationToken);
+    
+    // Créer un token JWT pour connexion automatique (optionnel)
+    const token = jwt.sign(
+      { id: result.insertId, email, role: role || 'parent' },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.',
+      token,
+      user: {
+        id: result.insertId,
+        nom: finalNom,
+        email,
+        role: role || 'parent'
+      }
+    });
+    
+  } catch (err) {
+    console.error('❌ Erreur register:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de l\'inscription',
+      details: err.message 
+    });
+  }
+};
+
+// ---------- Inscription (version existante) ----------
 exports.inscription = async (req, res) => {
   const { nom, prenom, email, mot_de_passe } = req.body;
 

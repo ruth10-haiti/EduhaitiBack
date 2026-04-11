@@ -5,17 +5,15 @@ require('dotenv').config();
 const app = express();
 
 // ========== 1. CONFIGURATION CORS AMÉLIORÉE ==========
-// Liste des origines autorisées (ajoutez vos domaines frontend)
 const allowedOrigins = [
   'https://eduhaiti-wjx6.onrender.com',    
   'https://edu-haiti.vercel.app',      
-  'http://localhost:5173',                  // Développement local (Vite)
-  'http://localhost:5000'                   // Pour tester localement
+  'http://localhost:5173',
+  'http://localhost:5000'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Permettre les requêtes sans origin (comme les appels serveur à serveur)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -24,17 +22,15 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,            // Permet l'envoi de cookies / tokens
+  credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Le middleware cors gère déjà automatiquement les requêtes OPTIONS (preflight)
 app.use(cors(corsOptions));
 
 // ========== 2. MIDDLEWARE DE LOGGING ==========
-// Affiche chaque requête reçue (très utile pour voir si le backend est contacté)
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
@@ -47,16 +43,16 @@ app.use(express.urlencoded({ extended: true }));
 // ========== 4. CONNEXION À LA BASE DE DONNÉES ==========
 const pool = require('./config/db');
 
-// Tester la connexion DB au démarrage
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error('❌ Erreur de connexion à la base de données:', err.message);
-    process.exit(1); // Arrête le serveur si la DB est inaccessible
-  } else {
+// Tester la connexion DB au démarrage (version callback pour compatibilité)
+pool.getConnection()
+  .then(connection => {
     console.log('✅ Connecté à la base de données MySQL');
     connection.release();
-  }
-});
+  })
+  .catch(err => {
+    console.error('❌ Erreur de connexion à la base de données:', err.message);
+    console.error('💡 Ne pas arrêter le serveur - vérification des routes...');
+  });
 
 // ========== 5. ROUTES ==========
 const authRoutes = require('./routes/auth');

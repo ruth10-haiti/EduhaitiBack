@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
   const authHeader = req.header('Authorization');
+  
   if (!authHeader) {
     return res.status(401).json({ message: 'Accès non autorisé : token manquant' });
   }
@@ -16,7 +17,7 @@ module.exports = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (err) {
-    console.error('Erreur JWT:', err);
+    console.error('Erreur JWT:', err.message);
     return res.status(401).json({ message: 'Token invalide ou expiré' });
   }
 };

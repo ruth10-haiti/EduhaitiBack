@@ -4,17 +4,17 @@ const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 
 // Routes publiques
-// ✅ Ajout de la route /register (pour compatibilité avec votre frontend)
 router.post('/register', authController.register);
-router.post('/inscription', authController.inscription);
+router.post('/inscription', authController.register); // Alias
 router.post('/connexion', authController.connexion);
 router.post('/mot-de-passe-oublie', authController.motDePasseOublie);
 router.post('/reinitialiser-mot-de-passe', authController.reinitialiserMotDePasse);
+router.post('/renvoyer-verification', authController.renvoyerVerification);
 
 // Route de vérification d'email (GET)
 router.get('/verifier-email/:token', authController.verifierEmail);
 
-// Route protégée pour récupérer les infos de l'utilisateur connecté
+// Route protégée
 router.get('/me', auth, authController.getMe);
 
 module.exports = router;

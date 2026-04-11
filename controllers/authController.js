@@ -1,78 +1,17 @@
 const db = require('../config/db');
-
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { Resend } = require('resend');
+const { sendVerificationEmail, sendWelcomeEmail, sendResetPasswordEmail } = require('../services/emailService');
 
-// Initialisation de Resend avec ta clé API (stockée dans .env)
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Adresse d'envoi (doit être vérifiée dans Resend)
-const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@ton-domaine.com';
-
-// ---------- Fonctions d'envoi d'email ----------
-
-// Email de vérification d'inscription
-const sendVerificationEmail = async (to, token) => {
-  const verificationLink = `${process.env.FRONTEND_URL}/verifier-email/${token}`;
-  try {
-    const { data, error } = await resend.emails.send({
-      from: `"EduHaiti" <${FROM_EMAIL}>`,
-      to: [to],
-      subject: 'Vérifie ton adresse email',
-      html: `
-        <h2>Bienvenue sur EduHaiti !</h2>
-        <p>Merci de t’être inscrit. Pour activer ton compte, clique sur le lien ci-dessous :</p>
-        <a href="${verificationLink}">${verificationLink}</a>
-        <p>Ce lien expire dans 24 heures.</p>
-        <p>Si tu n’as pas créé de compte, ignore cet email.</p>
-      `,
-    });
-    if (error) throw new Error(error.message);
-    console.log(`Email de vérification envoyé à ${to} (ID: ${data?.id})`);
-  } catch (err) {
-    console.error('Erreur sendVerificationEmail:', err);
-    throw new Error("Impossible d'envoyer l'email de vérification");
-  }
-};
-
-// Email de réinitialisation du mot de passe
-const sendResetEmail = async (to, token) => {
-  const resetLink = `${process.env.FRONTEND_URL}/reinitialiser-mot-de-passe/${token}`;
-  try {
-    const { data, error } = await resend.emails.send({
-      from: `"EduHaiti" <${FROM_EMAIL}>`,
-      to: [to],
-      subject: 'Réinitialisation de ton mot de passe',
-      html: `
-        <h2>Réinitialisation du mot de passe</h2>
-        <p>Tu as demandé à réinitialiser ton mot de passe. Clique sur le lien ci-dessous :</p>
-        <a href="${resetLink}">${resetLink}</a>
-        <p>Ce lien expire dans 1 heure.</p>
-        <p>Si tu n’es pas à l’origine de cette demande, ignore cet email.</p>
-      `,
-    });
-    if (error) throw new Error(error.message);
-    console.log(`Email de réinitialisation envoyé à ${to} (ID: ${data?.id})`);
-  } catch (err) {
-    console.error('Erreur sendResetEmail:', err);
-    throw new Error("Impossible d'envoyer l'email de réinitialisation");
-  }
-};
-
-// ---------- NOUVELLE FONCTION register (pour compatibilité frontend) ----------
+// ========== INSCRIPTION ==========
 exports.register = async (req, res) => {
   console.log('📝 [register] Corps reçu:', req.body);
   
   try {
-    // Extraire les données (supporte les deux formats)
     let { nom, prenom, email, password, mot_de_passe, role } = req.body;
     
-    // Gérer le mot de passe (password ou mot_de_passe)
     const finalPassword = password || mot_de_passe;
-    
-    // Gérer le nom (nom seul ou prenom + nom)
     let finalNom = nom;
     if (prenom && nom) {
       finalNom = `${prenom} ${nom}`;
@@ -80,29 +19,21 @@ exports.register = async (req, res) => {
     
     console.log('📊 Données traitées:', { nom: finalNom, email, role });
     
-    // Validation
     if (!finalNom || !email || !finalPassword) {
-      return res.status(400).json({ 
-        error: 'Nom, email et mot de passe sont requis' 
-      });
+      return res.status(400).json({ error: 'Nom, email et mot de passe sont requis' });
     }
     
     if (finalPassword.length < 6) {
-      return res.status(400).json({ 
-        error: 'Le mot de passe doit contenir au moins 6 caractères' 
-      });
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
     }
     
-    // Vérifier si l'email existe déjà
     const [rows] = await db.query('SELECT id FROM utilisateurs WHERE email = ?', [email]);
     if (rows.length > 0) {
       return res.status(400).json({ error: 'Cet email est déjà utilisé' });
     }
     
-    // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(finalPassword, 10);
     
-    // Séparer le nom complet en nom et prénom si nécessaire
     let nomPart = finalNom;
     let prenomPart = '';
     const nameParts = finalNom.split(' ');
@@ -114,15 +45,13 @@ exports.register = async (req, res) => {
       nomPart = '';
     }
     
-    // Insérer l'utilisateur
     const [result] = await db.query(
       'INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, email_verifie) VALUES (?, ?, ?, ?, ?, ?)',
       [nomPart, prenomPart, email, hashedPassword, role || 'parent', false]
     );
     
-    // Générer un token de vérification d'email
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expireDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    const expireDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
     
     await db.query(
       'INSERT INTO verification_email (id_utilisateur, token, expire_a) VALUES (?, ?, ?)',
@@ -130,112 +59,58 @@ exports.register = async (req, res) => {
     );
     
     // Envoyer l'email de vérification
-    await sendVerificationEmail(email, verificationToken);
-    
-    // Créer un token JWT pour connexion automatique (optionnel)
-    const token = jwt.sign(
-      { id: result.insertId, email, role: role || 'parent' },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE || '7d' }
-    );
+    await sendVerificationEmail(email, verificationToken, finalNom);
     
     res.status(201).json({
       success: true,
-      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.',
-      token,
-      user: {
-        id: result.insertId,
-        nom: finalNom,
-        email,
-        role: role || 'parent'
-      }
+      message: 'Inscription réussie ! Un email de vérification a été envoyé.',
+      userId: result.insertId
     });
     
   } catch (err) {
     console.error('❌ Erreur register:', err);
-    res.status(500).json({ 
-      error: 'Erreur lors de l\'inscription',
-      details: err.message 
-    });
+    res.status(500).json({ error: 'Erreur lors de l\'inscription', details: err.message });
   }
 };
 
-// ---------- Inscription (version existante) ----------
-exports.inscription = async (req, res) => {
-  const { nom, prenom, email, mot_de_passe } = req.body;
-
-  if (!nom || !prenom || !email || !mot_de_passe) {
-    return res.status(400).json({ message: 'Tous les champs sont requis' });
-  }
-
-  try {
-    // Vérifier si l'email existe déjà
-    const [rows] = await db.query('SELECT id FROM utilisateurs WHERE email = ?', [email]);
-    if (rows.length > 0) {
-      return res.status(400).json({ message: 'Cet email est déjà utilisé' });
-    }
-
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(mot_de_passe, 10);
-
-    // Insérer l'utilisateur
-    const [result] = await db.query(
-      'INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, email_verifie) VALUES (?, ?, ?, ?, ?, ?)',
-      [nom, prenom, email, hashedPassword, 'parent', false]
-    );
-
-    // Générer un token de vérification d'email
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expireDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-
-    await db.query(
-      'INSERT INTO verification_email (id_utilisateur, token, expire_a) VALUES (?, ?, ?)',
-      [result.insertId, verificationToken, expireDate]
-    );
-
-    // Envoyer l'email de vérification
-    await sendVerificationEmail(email, verificationToken);
-
-    res.status(201).json({
-      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.'
-    });
-  } catch (err) {
-    console.error('Erreur inscription:', err);
-    res.status(500).json({ message: 'Erreur serveur lors de l\'inscription' });
-  }
-};
-
-// ---------- Vérification d'email ----------
+// ========== VÉRIFICATION EMAIL ==========
 exports.verifierEmail = async (req, res) => {
   const { token } = req.params;
-
+  
   try {
     const [rows] = await db.query(
-      'SELECT id_utilisateur FROM verification_email WHERE token = ? AND expire_a > NOW()',
+      `SELECT v.id_utilisateur, u.nom, u.prenom, u.email, u.role 
+       FROM verification_email v 
+       JOIN utilisateurs u ON v.id_utilisateur = u.id 
+       WHERE v.token = ? AND v.expire_a > NOW() AND u.email_verifie = false`,
       [token]
     );
-
+    
     if (rows.length === 0) {
-      return res.status(400).send('Lien de vérification invalide ou expiré.');
+      return res.status(400).json({ error: 'Lien de vérification invalide ou expiré' });
     }
-
+    
     const userId = rows[0].id_utilisateur;
-
-    // Marquer l'email comme vérifié
+    const userEmail = rows[0].email;
+    const userNom = `${rows[0].prenom} ${rows[0].nom}`;
+    const userRole = rows[0].role;
+    
     await db.query('UPDATE utilisateurs SET email_verifie = true WHERE id = ?', [userId]);
-
-    // Supprimer le token utilisé
     await db.query('DELETE FROM verification_email WHERE token = ?', [token]);
-
-    // Rediriger vers la page de connexion du frontend
+    
+    // Envoyer email de bienvenue
+    await sendWelcomeEmail(userEmail, userNom, userRole);
+    
+    // Rediriger vers le frontend avec paramètre de succès
     res.redirect(`${process.env.FRONTEND_URL}/connexion?verified=true`);
-  } catch (err) {
-    console.error('Erreur vérification email:', err);
-    res.status(500).send('Erreur lors de la vérification de l\'email.');
+    
+  } catch (error) {
+    console.error('❌ Erreur vérification:', error);
+    res.status(500).json({ error: 'Erreur lors de la vérification' });
   }
 };
 
-// ---------- Connexion ----------
+// ========== CONNEXION ==========
 exports.connexion = async (req, res) => {
   const { email, mot_de_passe } = req.body;
 
@@ -261,24 +136,34 @@ exports.connexion = async (req, res) => {
     }
 
     if (!user.email_verifie) {
-      return res.status(403).json({ message: 'Veuillez vérifier votre email avant de vous connecter' });
+      return res.status(403).json({ 
+        message: 'Veuillez vérifier votre email avant de vous connecter',
+        needVerification: true,
+        email: user.email
+      });
     }
 
     await db.query('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?', [user.id]);
 
+    // Déterminer la redirection selon le rôle
+    let redirectUrl = '/dashboard';
+    switch(user.role) {
+      case 'admin': redirectUrl = '/admin'; break;
+      case 'parent': redirectUrl = '/parent'; break;
+      case 'bunexe': redirectUrl = '/bunexe'; break;
+      case 'secretariat': redirectUrl = '/secretariat'; break;
+    }
+
     const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        id_ecole: user.id_ecole
-      },
+      { id: user.id, email: user.email, role: user.role, id_ecole: user.id_ecole },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
     res.json({
+      success: true,
       token,
+      redirectUrl,
       user: {
         id: user.id,
         nom: user.nom,
@@ -294,7 +179,43 @@ exports.connexion = async (req, res) => {
   }
 };
 
-// ---------- Mot de passe oublié ----------
+// ========== RENVOYER EMAIL DE VÉRIFICATION ==========
+exports.renvoyerVerification = async (req, res) => {
+  const { email } = req.body;
+  
+  try {
+    const [users] = await db.query(
+      'SELECT id, nom, prenom, email FROM utilisateurs WHERE email = ? AND email_verifie = false',
+      [email]
+    );
+    
+    if (users.length === 0) {
+      return res.status(400).json({ error: 'Email déjà vérifié ou inexistant' });
+    }
+    
+    const user = users[0];
+    
+    await db.query('DELETE FROM verification_email WHERE id_utilisateur = ?', [user.id]);
+    
+    const newToken = crypto.randomBytes(32).toString('hex');
+    const expireDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    await db.query(
+      'INSERT INTO verification_email (id_utilisateur, token, expire_a) VALUES (?, ?, ?)',
+      [user.id, newToken, expireDate]
+    );
+    
+    await sendVerificationEmail(email, newToken, `${user.prenom} ${user.nom}`);
+    
+    res.json({ success: true, message: 'Nouvel email de vérification envoyé' });
+    
+  } catch (error) {
+    console.error('❌ Erreur renvoi:', error);
+    res.status(500).json({ error: 'Erreur lors du renvoi' });
+  }
+};
+
+// ========== MOT DE PASSE OUBLIÉ ==========
 exports.motDePasseOublie = async (req, res) => {
   const { email } = req.body;
 
@@ -303,23 +224,22 @@ exports.motDePasseOublie = async (req, res) => {
   }
 
   try {
-    const [rows] = await db.query('SELECT id FROM utilisateurs WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT id, nom, prenom FROM utilisateurs WHERE email = ?', [email]);
     if (rows.length === 0) {
       return res.json({ message: 'Si un compte existe avec cet email, vous recevrez un lien de réinitialisation.' });
     }
 
-    const userId = rows[0].id;
+    const user = rows[0];
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const expireDate = new Date(Date.now() + 60 * 60 * 1000); // 1h
+    const expireDate = new Date(Date.now() + 60 * 60 * 1000);
 
-    await db.query('DELETE FROM reinitialisation_mdp WHERE id_utilisateur = ?', [userId]);
+    await db.query('DELETE FROM reinitialisation_mdp WHERE id_utilisateur = ?', [user.id]);
     await db.query(
       'INSERT INTO reinitialisation_mdp (id_utilisateur, token, expire_a) VALUES (?, ?, ?)',
-      [userId, resetToken, expireDate]
+      [user.id, resetToken, expireDate]
     );
 
-    // Envoi de l'email
-    await sendResetEmail(email, resetToken);
+    await sendResetPasswordEmail(email, resetToken, `${user.prenom} ${user.nom}`);
 
     res.json({ message: 'Si un compte existe avec cet email, vous recevrez un lien de réinitialisation.' });
   } catch (err) {
@@ -328,7 +248,7 @@ exports.motDePasseOublie = async (req, res) => {
   }
 };
 
-// ---------- Réinitialisation du mot de passe ----------
+// ========== RÉINITIALISATION MOT DE PASSE ==========
 exports.reinitialiserMotDePasse = async (req, res) => {
   const { token, nouveau_mot_de_passe } = req.body;
 
@@ -359,7 +279,7 @@ exports.reinitialiserMotDePasse = async (req, res) => {
   }
 };
 
-// ---------- Récupérer l'utilisateur connecté ----------
+// ========== RÉCUPÉRER UTILISATEUR CONNECTÉ ==========
 exports.getMe = async (req, res) => {
   try {
     const [rows] = await db.query(

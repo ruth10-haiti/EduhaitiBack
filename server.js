@@ -31,7 +31,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Répondre aux requêtes preflight
+app.options('/*', cors(corsOptions)); 
 
 // ========== 2. MIDDLEWARE DE LOGING ==========
 // Affiche chaque requête reçue (très utile pour voir si le backend est contacté)

@@ -30,10 +30,10 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
+// Le middleware cors gère déjà automatiquement les requêtes OPTIONS (preflight)
 app.use(cors(corsOptions));
-app.options('/*', cors(corsOptions)); 
 
-// ========== 2. MIDDLEWARE DE LOGING ==========
+// ========== 2. MIDDLEWARE DE LOGGING ==========
 // Affiche chaque requête reçue (très utile pour voir si le backend est contacté)
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);

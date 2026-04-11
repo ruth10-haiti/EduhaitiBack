@@ -12,8 +12,8 @@ const createTransporter = () => {
   // Configuration optimisée pour Render.com
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,                    // ✅ Port 587 (pas 465)
-    secure: false,                // ✅ false pour port 587
+    port: 587,                   
+    secure: false,               
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_APP_PASSWORD

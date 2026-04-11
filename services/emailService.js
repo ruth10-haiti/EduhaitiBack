@@ -1,17 +1,44 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Créer le transporteur Gmail
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
+// ✅ CORRECTION: Configuration explicite pour Render.com
+const createTransporter = () => {
+  // Vérifier si les variables sont présentes
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
+    console.warn('⚠️ Variables d\'email non configurées');
+    return null;
   }
-});
+
+  // Configuration optimisée pour Render.com
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,                    // ✅ Port 587 (pas 465)
+    secure: false,                // ✅ false pour port 587
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_APP_PASSWORD
+    },
+    family: 4,                    // ✅ FORCE IPv4 (CRITIQUE pour Render)
+    tls: {
+      rejectUnauthorized: false   // Évite les erreurs de certificat
+    },
+    connectionTimeout: 30000,     // 30 secondes
+    greetingTimeout: 30000,
+    socketTimeout: 30000
+  });
+};
 
 // Email de vérification d'inscription
 const sendVerificationEmail = async (to, token, nom) => {
+  const transporter = createTransporter();
+  
+  // Mode développement/sans email
+  if (!transporter) {
+    console.log(`📧 [SIMULATION] Email de vérification à ${to}`);
+    console.log(`   Lien: ${process.env.FRONTEND_URL}/verifier-email/${token}`);
+    return { success: true, simulated: true };
+  }
+
   const verificationLink = `${process.env.FRONTEND_URL}/verifier-email/${token}`;
   
   const mailOptions = {
@@ -52,14 +79,21 @@ const sendVerificationEmail = async (to, token, nom) => {
     console.log(`✅ Email de vérification envoyé à ${to}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Erreur envoi email:', error);
+    console.error('❌ Erreur envoi email:', error.message);
     return { success: false, error: error.message };
   }
 };
 
 // Email de bienvenue après vérification
 const sendWelcomeEmail = async (to, nom, role) => {
-  const dashboardLink = `${process.env.FRONTEND_URL}/${role}`;
+  const transporter = createTransporter();
+  
+  if (!transporter) {
+    console.log(`📧 [SIMULATION] Email de bienvenue à ${to}`);
+    return { success: true, simulated: true };
+  }
+
+  const dashboardLink = `${process.env.FRONTEND_URL}/${role === 'parent' ? 'dashboard-parent' : 'dashboard'}`;
   
   const mailOptions = {
     from: `"EduHaiti" <${process.env.EMAIL_USER}>`,
@@ -97,13 +131,20 @@ const sendWelcomeEmail = async (to, nom, role) => {
     console.log(`✅ Email de bienvenue envoyé à ${to}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur envoi email bienvenue:', error);
-    return { success: false };
+    console.error('❌ Erreur envoi email bienvenue:', error.message);
+    return { success: false, error: error.message };
   }
 };
 
 // Email de réinitialisation mot de passe
 const sendResetPasswordEmail = async (to, token, nom) => {
+  const transporter = createTransporter();
+  
+  if (!transporter) {
+    console.log(`📧 [SIMULATION] Email reset à ${to}`);
+    return { success: true, simulated: true };
+  }
+
   const resetLink = `${process.env.FRONTEND_URL}/reinitialiser-mot-de-passe/${token}`;
   
   const mailOptions = {
@@ -136,8 +177,8 @@ const sendResetPasswordEmail = async (to, token, nom) => {
     console.log(`✅ Email de réinitialisation envoyé à ${to}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Erreur envoi reset:', error);
-    return { success: false };
+    console.error('❌ Erreur envoi reset:', error.message);
+    return { success: false, error: error.message };
   }
 };
 

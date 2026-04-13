@@ -65,6 +65,7 @@ const resultatExamenRoutes = require('./routes/resultatExamens');
 const documentRoutes = require('./routes/documents');
 const transfertRoutes = require('./routes/transferts');
 const adminRoutes = require('./routes/admin'); // ← NOUVEAU
+const setupRoutes = require('./routes/setup');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/utilisateurs', utilisateurRoutes);
@@ -77,7 +78,8 @@ app.use('/api/inscriptions-examens', inscriptionExamenRoutes);
 app.use('/api/resultats-examens', resultatExamenRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/transferts', transfertRoutes);
-app.use('/api/admin', adminRoutes); // ← NOUVEAU
+app.use('/api/admin', adminRoutes); 
+app.use('/api/setup', setupRoutes);
 
 // Route de test (santé)
 app.get('/api/health', (req, res) => {

@@ -52,11 +52,13 @@ router.post('/utilisateurs/creer', async (req, res) => {
   }
 });
 
-// ========== LISTER LES UTILISATEURS ==========
+// ========== LISTER LES UTILISATEURS (CORRIGÉ) ==========
 router.get('/utilisateurs', async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT id, nom, prenom, email, role, id_ecole, created_at, derniere_connexion, 
+      `SELECT id, nom, prenom, email, role, id_ecole, 
+              COALESCE(created_at, date_inscription) as created_at,
+              derniere_connexion,
               COALESCE(doit_changer_mdp, false) as doit_changer_mdp
        FROM utilisateurs 
        ORDER BY created_at DESC`

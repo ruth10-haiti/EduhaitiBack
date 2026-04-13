@@ -11,22 +11,26 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 30000,
-  // Important pour Railway
-  ssl: false
+  connectTimeout: 30000
 });
 
-// Test de connexion au démarrage (version async/await)
+// Test de connexion au démarrage (version corrigée sans .connectionConfig)
 (async () => {
   try {
     const connection = await pool.getConnection();
     console.log('✅ Connecté à la base de données MySQL');
-    console.log(`📊 Hôte: ${pool.config.connectionConfig.host}:${pool.config.connectionConfig.port}`);
-    console.log(`📊 Base: ${pool.config.connectionConfig.database}`);
+    
+    // Afficher les infos de connexion correctement
+    const config = pool.pool.config;
+    console.log(`📊 Hôte: ${config.host}:${config.port}`);
+    console.log(`📊 Base: ${config.database}`);
+    console.log(`📊 Utilisateur: ${config.user}`);
+    
     connection.release();
   } catch (error) {
     console.error('❌ Erreur de connexion à la base de données:', error.message);
     console.error('💡 Vérifiez vos variables d\'environnement');
+    console.error('   Variables attendues: MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE');
     // Ne pas exit ici, laisser le serveur démarrer pour debug
   }
 })();

@@ -9,7 +9,7 @@ exports.register = async (req, res) => {
   console.log('📝 [register] Corps reçu:', req.body);
   
   try {
-    let { nom, prenom, email, password, mot_de_passe, role } = req.body;
+    let { nom, prenom, email, password, mot_de_passe, role, parent_id, id_ecole, classe } = req.body;
     
     const finalPassword = password || mot_de_passe;
     let finalNom = nom;
@@ -46,8 +46,10 @@ exports.register = async (req, res) => {
     }
     
     const [result] = await db.query(
-      'INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, email_verifie) VALUES (?, ?, ?, ?, ?, ?)',
-      [nomPart, prenomPart, email, hashedPassword, role || 'parent', false]
+      `INSERT INTO utilisateurs 
+       (nom, prenom, email, mot_de_passe, role, email_verifie, parent_id, id_ecole, classe) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [nomPart, prenomPart, email, hashedPassword, role || 'parent', false, parent_id || null, id_ecole || null, classe || null]
     );
     
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -58,7 +60,6 @@ exports.register = async (req, res) => {
       [result.insertId, verificationToken, expireDate]
     );
     
-    // Envoyer l'email de vérification
     await sendVerificationEmail(email, verificationToken, finalNom);
     
     res.status(201).json({
@@ -98,10 +99,8 @@ exports.verifierEmail = async (req, res) => {
     await db.query('UPDATE utilisateurs SET email_verifie = true WHERE id = ?', [userId]);
     await db.query('DELETE FROM verification_email WHERE token = ?', [token]);
     
-    // Envoyer email de bienvenue
     await sendWelcomeEmail(userEmail, userNom, userRole);
     
-    // Rediriger vers le frontend avec paramètre de succès
     res.redirect(`${process.env.FRONTEND_URL}/connexion?verified=true`);
     
   } catch (error) {
@@ -110,7 +109,7 @@ exports.verifierEmail = async (req, res) => {
   }
 };
 
-// ========== CONNEXION ==========
+// ========== CONNEXION (CORRIGÉE avec doit_changer_mdp) ==========
 exports.connexion = async (req, res) => {
   const { email, mot_de_passe } = req.body;
 
@@ -120,7 +119,9 @@ exports.connexion = async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      'SELECT id, nom, prenom, email, mot_de_passe, role, id_ecole, email_verifie FROM utilisateurs WHERE email = ?',
+      `SELECT id, nom, prenom, email, mot_de_passe, role, id_ecole, email_verifie, 
+              COALESCE(doit_changer_mdp, false) as doit_changer_mdp 
+       FROM utilisateurs WHERE email = ?`,
       [email]
     );
 
@@ -145,7 +146,6 @@ exports.connexion = async (req, res) => {
 
     await db.query('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = ?', [user.id]);
 
-    // Déterminer la redirection selon le rôle
     let redirectUrl = '/dashboard';
     switch(user.role) {
       case 'admin': redirectUrl = '/admin'; break;
@@ -154,8 +154,10 @@ exports.connexion = async (req, res) => {
       case 'secretariat': redirectUrl = '/secretariat'; break;
     }
 
+    const doitChangerMdp = user.doit_changer_mdp === 1 || user.doit_changer_mdp === true;
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, id_ecole: user.id_ecole },
+      { id: user.id, email: user.email, role: user.role, id_ecole: user.id_ecole, doit_changer_mdp: doitChangerMdp },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
@@ -164,13 +166,15 @@ exports.connexion = async (req, res) => {
       success: true,
       token,
       redirectUrl,
+      doit_changer_mdp: doitChangerMdp,
       user: {
         id: user.id,
         nom: user.nom,
         prenom: user.prenom,
         email: user.email,
         role: user.role,
-        id_ecole: user.id_ecole
+        id_ecole: user.id_ecole,
+        doit_changer_mdp: doitChangerMdp
       }
     });
   } catch (err) {
@@ -283,7 +287,9 @@ exports.reinitialiserMotDePasse = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT id, nom, prenom, email, role, id_ecole, email_verifie, derniere_connexion FROM utilisateurs WHERE id = ?',
+      `SELECT id, nom, prenom, email, role, id_ecole, email_verifie, derniere_connexion,
+              COALESCE(doit_changer_mdp, false) as doit_changer_mdp
+       FROM utilisateurs WHERE id = ?`,
       [req.user.id]
     );
 

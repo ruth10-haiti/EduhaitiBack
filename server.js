@@ -43,7 +43,6 @@ app.use(express.urlencoded({ extended: true }));
 // ========== 4. CONNEXION À LA BASE DE DONNÉES ==========
 const pool = require('./config/db');
 
-// Tester la connexion DB au démarrage (version callback pour compatibilité)
 pool.getConnection()
   .then(connection => {
     console.log('✅ Connecté à la base de données MySQL');
@@ -51,7 +50,6 @@ pool.getConnection()
   })
   .catch(err => {
     console.error('❌ Erreur de connexion à la base de données:', err.message);
-    console.error('💡 Ne pas arrêter le serveur - vérification des routes...');
   });
 
 // ========== 5. ROUTES ==========
@@ -66,6 +64,7 @@ const inscriptionExamenRoutes = require('./routes/inscriptionExamens');
 const resultatExamenRoutes = require('./routes/resultatExamens');
 const documentRoutes = require('./routes/documents');
 const transfertRoutes = require('./routes/transferts');
+const adminRoutes = require('./routes/admin'); // ← NOUVEAU
 
 app.use('/api/auth', authRoutes);
 app.use('/api/utilisateurs', utilisateurRoutes);
@@ -78,6 +77,7 @@ app.use('/api/inscriptions-examens', inscriptionExamenRoutes);
 app.use('/api/resultats-examens', resultatExamenRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/transferts', transfertRoutes);
+app.use('/api/admin', adminRoutes); // ← NOUVEAU
 
 // Route de test (santé)
 app.get('/api/health', (req, res) => {

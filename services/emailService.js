@@ -114,6 +114,46 @@ const sendWelcomeEmail = async (to, nom, role) => {
     return await sendEmailViaBrevo(to, '🎉 Bienvenue sur EduHaiti - Ton compte est activé !', htmlContent, nom);
 };
 
+// Email avec mot de passe temporaire (pour création par admin) - VERSION BREVO
+const sendTemporaryPasswordEmail = async (email, nom, role, temporaryPassword) => {
+    const roleNames = {
+        admin: 'Administrateur',
+        secretariat: 'Secrétariat',
+        bunexe: 'Bunexe'
+    };
+    
+    const roleName = roleNames[role] || role;
+    const loginUrl = `${process.env.FRONTEND_URL}/connexion`;
+    
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+            <h2 style="color: #2c3e50;">🎓 Bienvenue sur EduHaiti</h2>
+            <p>Bonjour <strong>${nom}</strong>,</p>
+            <p>Un compte <strong>${roleName}</strong> a été créé pour vous sur la plateforme EduHaiti.</p>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0 0 10px 0;"><strong>🔑 Vos identifiants de connexion :</strong></p>
+                <p style="margin: 5px 0;"><strong>Email :</strong> ${email}</p>
+                <p style="margin: 5px 0;"><strong>Mot de passe temporaire :</strong> <code style="background: #e9ecef; padding: 3px 6px; border-radius: 4px;">${temporaryPassword}</code></p>
+            </div>
+            
+            <p><strong>⚠️ Important :</strong> Lors de votre première connexion, vous devrez changer votre mot de passe.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${loginUrl}" style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Se connecter
+                </a>
+            </div>
+            
+            <hr style="margin: 20px 0;" />
+            <p style="color: #7f8c8d; font-size: 12px;">Si vous n'avez pas demandé ce compte, ignorez cet email.</p>
+        </div>
+    `;
+    
+    // Utiliser Brevo comme les autres fonctions
+    return await sendEmailViaBrevo(email, `Votre compte EduHaiti - Rôle ${roleName}`, htmlContent, nom);
+};
+
 // Email de réinitialisation mot de passe
 const sendResetPasswordEmail = async (to, token, nom) => {
     const resetLink = `${process.env.FRONTEND_URL}/reinitialiser-mot-de-passe/${token}`;
@@ -144,5 +184,6 @@ const sendResetPasswordEmail = async (to, token, nom) => {
 module.exports = {
     sendVerificationEmail,
     sendWelcomeEmail,
-    sendResetPasswordEmail
+    sendResetPasswordEmail,
+    sendTemporaryPasswordEmail 
 };

@@ -6,10 +6,13 @@ const crypto = require('crypto');
 const { sendTemporaryPasswordEmail } = require('../services/emailService');
 const auth = require('../middleware/auth');
 const autoriser = require('../middleware/role');
+const dashboardController = require('../controllers/dashboardController');
 
 // Toutes ces routes nécessitent d'être admin
 router.use(auth);
 router.use(autoriser('admin'));
+
+router.get('/dashboard', dashboardController.getAdminStats);
 
 // ========== CRÉER UN UTILISATEUR (création directe) ==========
 router.post('/utilisateurs/creer', async (req, res) => {

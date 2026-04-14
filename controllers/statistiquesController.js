@@ -1,20 +1,26 @@
+// backend/controllers/statistiquesController.js (VERSION CORRIGÉE)
 const db = require('../config/db');
 
 // ========== STATISTIQUES AVANCÉES POUR GRAPHIQUES ==========
 exports.getGraphiques = async (req, res) => {
   try {
-    const { role, periode = '6' } = req.query;
+    const { periode = '6' } = req.query;
+    const userRole = req.user.role; // ← Récupérer le rôle de l'utilisateur connecté
     
-    let data = {};
-    
-    // Évolution générale des inscriptions (tous rôles)
-    const [evolution] = await db.query(`
+    let evolutionQuery = `
       SELECT DATE_FORMAT(date_inscription, '%Y-%m') as mois, COUNT(*) as total
       FROM inscriptions
       WHERE date_inscription >= DATE_SUB(NOW(), INTERVAL ? MONTH)
-      GROUP BY DATE_FORMAT(date_inscription, '%Y-%m')
-      ORDER BY mois ASC
-    `, [periode]);
+    `;
+    
+    // Filtrer selon le rôle (optionnel)
+    if (userRole === 'secretariat') {
+      // Le secrétariat voit uniquement ses écoles
+      evolutionQuery += ` AND id_ecole = ?`;
+      const [evolution] = await db.query(evolutionQuery, [periode, req.user.id_ecole]);
+    } else {
+      const [evolution] = await db.query(evolutionQuery, [periode]);
+    }
     
     // Top 5 écoles avec plus d'inscriptions
     const [topEcoles] = await db.query(`
@@ -39,9 +45,7 @@ exports.getGraphiques = async (req, res) => {
       LIMIT 5
     `);
     
-    data = { evolution, topEcoles, resultatsParExamen };
-    
-    res.json(data);
+    res.json({ evolution, topEcoles, resultatsParExamen });
   } catch (error) {
     console.error('❌ Erreur getGraphiques:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des graphiques' });
@@ -53,14 +57,16 @@ exports.getActivitesRecentes = async (req, res) => {
   try {
     const [activites] = await db.query(`
       (SELECT 'inscription' as type, i.date_inscription as date, 
-              CONCAT('Nouvelle inscription de l\'élève ', e.nom) as description
+              CONCAT('Nouvelle inscription de l\'élève ', e.nom, ' ', e.prenom) as description,
+              i.id as reference_id
        FROM inscriptions i
        JOIN eleves e ON i.id_eleve = e.id
        ORDER BY i.date_inscription DESC
        LIMIT 5)
       UNION ALL
       (SELECT 'examen' as type, e.date_creation as date,
-              CONCAT('Création de l\'examen ', e.nom) as description
+              CONCAT('Création de l\'examen "', e.nom, '"') as description,
+              e.id as reference_id
        FROM examens e
        ORDER BY e.date_creation DESC
        LIMIT 5)

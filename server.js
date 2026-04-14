@@ -66,10 +66,7 @@ const documentRoutes = require('./routes/documents');
 const transfertRoutes = require('./routes/transferts');
 const adminRoutes = require('./routes/admin'); 
 const setupRoutes = require('./routes/setup');
-const dashboardRoutes = require('./routes/dashboard');
-const statistiquesRoutes = require('./routes/statistiques');
-const bunexeRoutes = require('./routes/bunexe');
-const secretariatRoutes = require('./routes/secretariat');
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/utilisateurs', utilisateurRoutes);
@@ -84,10 +81,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/transferts', transfertRoutes);
 app.use('/api/admin', adminRoutes); 
 app.use('/api/setup', setupRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/statistiques', statistiquesRoutes);
-app.use('/api/bunexe', bunexeRoutes);
-app.use('/api/secretariat', secretariatRoutes);
+
 
 // Route de test (santé)
 app.get('/api/health', (req, res) => {

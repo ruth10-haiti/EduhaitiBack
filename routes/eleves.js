@@ -13,8 +13,12 @@ router.post('/', autoriser('admin', 'secretariat'), eleveController.create);
 router.put('/:id', autoriser('admin', 'secretariat'), eleveController.update);
 router.delete('/:id', autoriser('admin'), eleveController.delete);
 
-// Route spécifique pour les parents (liste de leurs enfants)
+// Routes spécifiques pour les parents
 router.get('/parent/enfants', autoriser('parent'), eleveController.getEnfantsParent);
+router.get('/parent/matricules', autoriser('parent'), eleveController.getMatriculeByParent);
+
+// Route pour lier un parent à un élève (admin/bunexe)
+router.post('/:id/lier-parent', autoriser('admin', 'bunexe'), eleveController.lierParentEleve);
 
 // Recherche par matricule
 router.get('/search/matricule/:matricule', autoriser('admin', 'secretariat', 'bunexe'), eleveController.searchByMatricule);

@@ -105,4 +105,21 @@ router.get('/ecoles', async (req, res) => {
   }
 });
 
+// Assigner une école à un utilisateur (secrétariat)
+router.put('/utilisateurs/:id/assigner-ecole', async (req, res) => {
+  const { id } = req.params;
+  const { id_ecole } = req.body;
+  
+  try {
+    await db.query(
+      'UPDATE utilisateurs SET id_ecole = ? WHERE id = ? AND role = "secretariat"',
+      [id_ecole, id]
+    );
+    res.json({ success: true, message: 'École assignée avec succès' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Erreur lors de l\'assignation' });
+  }
+});
+
 module.exports = router;

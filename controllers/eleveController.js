@@ -2,13 +2,11 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Classes valides pour validation
+// Classes valides pour validation (1ère AF à NS4 uniquement)
 const classesValides = [
-  'Préscolaire', 'Jardin', 'Préparatoire',
   '1ère AF', '2ème AF', '3ème AF', '4ème AF', '5ème AF', '6ème AF',
   '7ème AF', '8ème AF', '9ème AF',
-  'NS1', 'NS2', 'NS3', 'NS4',
-  'RH1', 'RH2', 'RH3'
+  'NS1', 'NS2', 'NS3', 'NS4'
 ];
 
 // Fonction pour générer un matricule unique (plus sécurisé)
@@ -34,6 +32,18 @@ async function genererMatriculeUnique() {
   }
   
   return matricule;
+}
+
+// Calculer l'âge à partir de la date de naissance
+function calculerAge(dateNaissance) {
+  const today = new Date();
+  const birthDate = new Date(dateNaissance);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
 }
 
 // Récupérer tous les élèves (admin, secretariat, bunexe)
@@ -110,32 +120,39 @@ function validateEleveData(data) {
     errors.push('Le prénom ne doit contenir que des lettres');
   }
 
-  // Validation de la date de naissance
+  // Validation de la date de naissance (âge entre 4 et 50 ans)
   if (data.date_naissance) {
     const dateNaissance = new Date(data.date_naissance);
     const aujourdhui = new Date();
     aujourdhui.setHours(0, 0, 0, 0);
     const dateMin = new Date('1900-01-01');
-    const dateMaxAge = new Date();
-    dateMaxAge.setFullYear(aujourdhui.getFullYear() - 100);
+    
+    // Calculer l'âge
+    const age = calculerAge(data.date_naissance);
 
     if (isNaN(dateNaissance.getTime())) {
       errors.push('Date de naissance invalide');
     } else if (dateNaissance > aujourdhui) {
       errors.push('La date de naissance ne peut pas être dans le futur');
-    } else if (dateNaissance < dateMaxAge) {
-      errors.push('Âge maximum dépassé (100 ans)');
+    } else if (age < 4) {
+      errors.push('L\'élève doit avoir au moins 4 ans');
+    } else if (age > 50) {
+      errors.push('L\'élève ne peut pas avoir plus de 50 ans');
     } else if (dateNaissance < dateMin) {
       errors.push('Date de naissance invalide');
     }
+  } else {
+    errors.push('La date de naissance est requise');
   }
 
   // Validation de la classe
-  if (data.classe && !classesValides.includes(data.classe)) {
+  if (!data.classe) {
+    errors.push('Veuillez sélectionner une classe');
+  } else if (!classesValides.includes(data.classe)) {
     errors.push(`Classe invalide. Valeurs acceptées: ${classesValides.join(', ')}`);
   }
 
-  // Validation du téléphone (format haïtien)
+  // Validation du téléphone parent (format haïtien)
   if (data.tel_parent) {
     const phoneClean = data.tel_parent.replace(/\s/g, '');
     if (!/^(\+509|509)?[0-9]{8}$/.test(phoneClean)) {

@@ -2,28 +2,35 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Fonction pour générer un matricule unique
+// Classes valides pour validation
+const classesValides = [
+  'Préscolaire', 'Jardin', 'Préparatoire',
+  '1ère AF', '2ème AF', '3ème AF', '4ème AF', '5ème AF', '6ème AF',
+  '7ème AF', '8ème AF', '9ème AF',
+  'NS1', 'NS2', 'NS3', 'NS4',
+  'RH1', 'RH2', 'RH3'
+];
+
+// Fonction pour générer un matricule unique (plus sécurisé)
 async function genererMatriculeUnique() {
   const annee = new Date().getFullYear();
-  const prefixe = `EL-${annee}-`;
+  const mois = String(new Date().getMonth() + 1).padStart(2, '0');
+  const jour = String(new Date().getDate()).padStart(2, '0');
   
-  // Compter le nombre d'élèves pour l'année en cours
-  const [rows] = await db.query(
-    'SELECT COUNT(*) as count FROM eleves WHERE matricule_national LIKE ?',
-    [`${prefixe}%`]
-  );
+  // Générer une partie aléatoire de 6 caractères
+  const randomPart = crypto.randomBytes(4).toString('hex').toUpperCase();
   
-  const numero = String(rows[0].count + 1).padStart(4, '0');
-  const matricule = `${prefixe}${numero}`;
+  const prefixe = `EL-${annee}${mois}${jour}-`;
+  const matricule = `${prefixe}${randomPart}`;
   
-  // Vérifier l'unicité (sécurité)
+  // Vérifier l'unicité
   const [existe] = await db.query(
     'SELECT id FROM eleves WHERE matricule_national = ?',
     [matricule]
   );
   
   if (existe.length > 0) {
-    return genererMatriculeUnique(); // Re-générer si collision
+    return genererMatriculeUnique();
   }
   
   return matricule;
@@ -32,7 +39,12 @@ async function genererMatriculeUnique() {
 // Récupérer tous les élèves (admin, secretariat, bunexe)
 exports.getAll = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM eleves ORDER BY nom, prenom');
+    const [rows] = await db.query(`
+      SELECT e.*, ec.nom as nom_ecole 
+      FROM eleves e
+      LEFT JOIN ecoles ec ON e.id_ecole = ec.id
+      ORDER BY e.nom, e.prenom
+    `);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -55,7 +67,13 @@ exports.getOne = async (req, res) => {
       }
     }
 
-    const [rows] = await db.query('SELECT * FROM eleves WHERE id = ?', [id]);
+    const [rows] = await db.query(`
+      SELECT e.*, ec.nom as nom_ecole 
+      FROM eleves e
+      LEFT JOIN ecoles ec ON e.id_ecole = ec.id
+      WHERE e.id = ?
+    `, [id]);
+    
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Élève non trouvé' });
     }
@@ -65,6 +83,88 @@ exports.getOne = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
+
+// Validation des champs
+function validateEleveData(data) {
+  const errors = [];
+
+  // Validation du nom
+  if (!data.nom || data.nom.trim().length < 2) {
+    errors.push('Le nom doit contenir au moins 2 caractères');
+  }
+  if (data.nom && data.nom.length > 50) {
+    errors.push('Le nom ne peut pas dépasser 50 caractères');
+  }
+  if (data.nom && !/^[a-zA-ZÀ-ÿ\s-]+$/.test(data.nom)) {
+    errors.push('Le nom ne doit contenir que des lettres');
+  }
+
+  // Validation du prénom
+  if (!data.prenom || data.prenom.trim().length < 2) {
+    errors.push('Le prénom doit contenir au moins 2 caractères');
+  }
+  if (data.prenom && data.prenom.length > 50) {
+    errors.push('Le prénom ne peut pas dépasser 50 caractères');
+  }
+  if (data.prenom && !/^[a-zA-ZÀ-ÿ\s-]+$/.test(data.prenom)) {
+    errors.push('Le prénom ne doit contenir que des lettres');
+  }
+
+  // Validation de la date de naissance
+  if (data.date_naissance) {
+    const dateNaissance = new Date(data.date_naissance);
+    const aujourdhui = new Date();
+    aujourdhui.setHours(0, 0, 0, 0);
+    const dateMin = new Date('1900-01-01');
+    const dateMaxAge = new Date();
+    dateMaxAge.setFullYear(aujourdhui.getFullYear() - 100);
+
+    if (isNaN(dateNaissance.getTime())) {
+      errors.push('Date de naissance invalide');
+    } else if (dateNaissance > aujourdhui) {
+      errors.push('La date de naissance ne peut pas être dans le futur');
+    } else if (dateNaissance < dateMaxAge) {
+      errors.push('Âge maximum dépassé (100 ans)');
+    } else if (dateNaissance < dateMin) {
+      errors.push('Date de naissance invalide');
+    }
+  }
+
+  // Validation de la classe
+  if (data.classe && !classesValides.includes(data.classe)) {
+    errors.push(`Classe invalide. Valeurs acceptées: ${classesValides.join(', ')}`);
+  }
+
+  // Validation du téléphone (format haïtien)
+  if (data.tel_parent) {
+    const phoneClean = data.tel_parent.replace(/\s/g, '');
+    if (!/^(\+509|509)?[0-9]{8}$/.test(phoneClean)) {
+      errors.push('Téléphone invalide. Format: 12345678 ou +50912345678');
+    }
+  }
+
+  // Validation de l'email
+  if (data.email_parent && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email_parent)) {
+    errors.push('Email invalide');
+  }
+
+  // Validation de l'école
+  if (!data.id_ecole) {
+    errors.push('Veuillez sélectionner une école');
+  }
+
+  // Validation du lieu de naissance
+  if (data.lieu_naissance && data.lieu_naissance.length > 100) {
+    errors.push('Le lieu de naissance ne peut pas dépasser 100 caractères');
+  }
+
+  // Validation de l'adresse
+  if (data.adresse && data.adresse.length > 255) {
+    errors.push('L\'adresse ne peut pas dépasser 255 caractères');
+  }
+
+  return errors;
+}
 
 // Créer un élève avec génération automatique du matricule
 exports.create = async (req, res) => {
@@ -86,8 +186,14 @@ exports.create = async (req, res) => {
     return res.status(400).json({ message: 'Le prénom et le nom sont requis' });
   }
 
+  // Validation complète
+  const validationErrors = validateEleveData(req.body);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ message: validationErrors.join(', ') });
+  }
+
   try {
-    // Générer un matricule unique automatiquement
+    // Générer un matricule unique plus sécurisé
     const matricule_national = await genererMatriculeUnique();
     
     console.log(`📝 Création élève: ${prenom} ${nom} - Matricule: ${matricule_national}`);
@@ -123,8 +229,13 @@ exports.update = async (req, res) => {
     id_ecole, classe, tel_parent, email_parent, adresse
   } = req.body;
 
+  // Validation
+  const validationErrors = validateEleveData(req.body);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ message: validationErrors.join(', ') });
+  }
+
   try {
-    // Ne pas modifier le matricule !
     const [result] = await db.query(
       `UPDATE eleves SET 
         prenom = ?, nom = ?, date_naissance = ?, lieu_naissance = ?,
@@ -150,9 +261,7 @@ exports.delete = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Supprimer d'abord les liens parent-élève
     await db.query('DELETE FROM parent_eleve WHERE id_eleve = ?', [id]);
-    // Puis supprimer l'élève
     const [result] = await db.query('DELETE FROM eleves WHERE id = ?', [id]);
     
     if (result.affectedRows === 0) {
@@ -200,24 +309,26 @@ exports.searchByMatricule = async (req, res) => {
   }
 };
 
-// ========== NOUVELLE FONCTION : Lier un parent à un élève ==========
+// Lier un parent à un élève
 exports.lierParentEleve = async (req, res) => {
-  const { id_eleve, email_parent, mot_de_passe_parent } = req.body;
+  const { id_eleve, email_parent } = req.body;
+  
+  // Validation email
+  if (!email_parent || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email_parent)) {
+    return res.status(400).json({ message: 'Email invalide' });
+  }
   
   try {
-    // Vérifier si l'élève existe
     const [eleve] = await db.query('SELECT * FROM eleves WHERE id = ?', [id_eleve]);
     if (eleve.length === 0) {
       return res.status(404).json({ message: 'Élève non trouvé' });
     }
     
-    // Vérifier si le parent existe déjà
     let [parent] = await db.query('SELECT * FROM utilisateurs WHERE email = ? AND role = "parent"', [email_parent]);
     let parentId;
     let motDePasseTemporaire;
     
     if (parent.length === 0) {
-      // Créer un compte parent automatiquement
       motDePasseTemporaire = crypto.randomBytes(6).toString('hex');
       const hashedPassword = await bcrypt.hash(motDePasseTemporaire, 10);
       
@@ -228,13 +339,12 @@ exports.lierParentEleve = async (req, res) => {
       );
       parentId = result.insertId;
       
-      // Envoyer l'email avec les identifiants
+      const { sendTemporaryPasswordEmail } = require('../services/emailService');
       await sendTemporaryPasswordEmail(email_parent, `Parent de ${eleve[0].prenom} ${eleve[0].nom}`, 'parent', motDePasseTemporaire);
     } else {
       parentId = parent[0].id;
     }
     
-    // Créer le lien parent-élève
     await db.query(
       'INSERT INTO parent_eleve (id_utilisateur, id_eleve) VALUES (?, ?)',
       [parentId, id_eleve]
@@ -253,7 +363,7 @@ exports.lierParentEleve = async (req, res) => {
   }
 };
 
-// ========== Récupérer le matricule d'un élève pour le parent ==========
+// Récupérer le matricule d'un élève pour le parent
 exports.getMatriculeByParent = async (req, res) => {
   const parentId = req.user.id;
   

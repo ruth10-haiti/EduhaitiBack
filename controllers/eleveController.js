@@ -2,7 +2,7 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Classes valides pour validation (1ère AF à NS4 uniquement)
+// Liste des classes pour validation (1ère AF à NS4 uniquement)
 const classesValides = [
   '1ère AF', '2ème AF', '3ème AF', '4ème AF', '5ème AF', '6ème AF',
   '7ème AF', '8ème AF', '9ème AF',

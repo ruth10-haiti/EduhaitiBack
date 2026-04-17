@@ -82,6 +82,11 @@ app.use('/api/transferts', transfertRoutes);
 app.use('/api/admin', adminRoutes); 
 app.use('/api/setup', setupRoutes);
 
+// Ajoute une route de redirection
+app.use('/api/elves', (req, res) => {
+  res.redirect(307, req.url.replace('/elves', '/eleves'));
+});
+
 
 // Route de test (santé)
 app.get('/api/health', (req, res) => {

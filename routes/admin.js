@@ -94,17 +94,27 @@ router.delete('/utilisateurs/:id', async (req, res) => {
   }
 });
 
-// ========== LISTER LES ÉCOLES ==========
-router.get('/ecoles', async (req, res) => {
+// router.get('/ecoles', async (req, res) => {
+//   try {
+//     const [rows] = await db.query('SELECT id, nom FROM ecoles ORDER BY nom');
+//     res.json(rows);
+//   } catch (error) {
+//     console.error('❌ Erreur chargement écoles:', error);
+//     res.status(500).json({ error: 'Erreur lors du chargement des écoles' });
+//   }
+// });
+
+
+// LISTER LES ÉCOLES
+router.get('/ecoles', autoriser('admin', 'bunexe'), async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nom FROM ecoles ORDER BY nom');
+    const [rows] = await db.query('SELECT id, nom, adresse, telephone FROM ecoles ORDER BY nom');
     res.json(rows);
   } catch (error) {
     console.error('❌ Erreur chargement écoles:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des écoles' });
   }
 });
-
 // Assigner une école à un utilisateur (secrétariat)
 router.put('/utilisateurs/:id/assigner-ecole', async (req, res) => {
   const { id } = req.params;

@@ -7,11 +7,14 @@ const autoriser = require('../middleware/role');
 router.use(auth);
 
 // ========== ROUTES EXISTANTES ==========
-router.get('/examen/:idExamen', autoriser('admin', 'bunexe'), inscriptionExamenController.getByExamen);
-router.get('/eleve/:idEleve', autoriser('admin', 'bunexe', 'parent'), inscriptionExamenController.getByEleve);
-router.post('/', autoriser('admin', 'bunexe'), inscriptionExamenController.create);
-router.put('/:id', autoriser('admin', 'bunexe'), inscriptionExamenController.update);
-router.delete('/:id', autoriser('admin', 'bunexe'), inscriptionExamenController.delete);
+router.get('/examen/:idExamen', autoriser('admin', 'bunexe', 'secretariat'), inscriptionExamenController.getByExamen);
+router.get('/eleve/:idEleve', autoriser('admin', 'bunexe', 'parent', 'secretariat'), inscriptionExamenController.getByEleve);
+router.post('/', autoriser('admin', 'bunexe', 'secretariat'), inscriptionExamenController.create);
+router.put('/:id', autoriser('admin', 'bunexe', 'secretariat'), inscriptionExamenController.update);
+router.delete('/:id', autoriser('admin', 'bunexe', 'secretariat'), inscriptionExamenController.delete);
+
+// POST soumettre la liste d'élèves (secrétariat)
+router.post('/soumettre', autoriser('admin', 'secretariat'), inscriptionExamenController.soumettreListe);
 
 // ========== NOUVELLES ROUTES POUR LE FRONTEND ==========
 

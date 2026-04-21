@@ -9,29 +9,23 @@ const classesValides = [
   'NS1', 'NS2', 'NS3', 'NS4'
 ];
 
-// Fonction pour générer un matricule unique (plus sécurisé)
+// Fonction pour générer un code aléatoire unique (Identité de l'élève)
 async function genererMatriculeUnique() {
-  const annee = new Date().getFullYear();
-  const mois = String(new Date().getMonth() + 1).padStart(2, '0');
-  const jour = String(new Date().getDate()).padStart(2, '0');
+  // Générer un code aléatoire de 8 caractères alphanumériques majuscules
+  const codeAleatoire = crypto.randomBytes(4).toString('hex').toUpperCase();
   
-  // Générer une partie aléatoire de 6 caractères
-  const randomPart = crypto.randomBytes(4).toString('hex').toUpperCase();
-  
-  const prefixe = `EL-${annee}${mois}${jour}-`;
-  const matricule = `${prefixe}${randomPart}`;
-  
-  // Vérifier l'unicité
+  // Vérifier l'unicité dans la base de données
   const [existe] = await db.query(
     'SELECT id FROM eleves WHERE matricule_national = ?',
-    [matricule]
+    [codeAleatoire]
   );
   
   if (existe.length > 0) {
+    // Si le code existe déjà (très rare), on recommence
     return genererMatriculeUnique();
   }
   
-  return matricule;
+  return codeAleatoire;
 }
 
 // Calculer l'âge à partir de la date de naissance

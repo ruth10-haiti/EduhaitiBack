@@ -166,3 +166,43 @@ exports.rejeter = async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
+
+// Soumettre la liste des élèves (secrétariat vers BUNEXE)
+exports.soumettreListe = async (req, res) => {
+  const { idExamen } = req.body;
+  const idEcole = req.user.id_ecole;
+
+  if (!idExamen) {
+    return res.status(400).json({ message: 'L\'ID de l\'examen est requis' });
+  }
+
+  if (!idEcole && req.user.role !== 'admin') {
+     return res.status(403).json({ message: 'Aucune école associée à cet utilisateur' });
+  }
+
+  try {
+    let query = `
+      UPDATE inscription_examens ie
+      JOIN eleves e ON ie.id_eleve = e.id
+      SET ie.statut = 'soumise'
+      WHERE ie.id_examen = ? AND ie.statut = 'en_attente'
+    `;
+    let params = [idExamen];
+
+    if (req.user.role !== 'admin') {
+      query += ` AND e.id_ecole = ?`;
+      params.push(idEcole);
+    }
+
+    const [result] = await db.query(query, params);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Aucune inscription en attente à soumettre pour cet examen' });
+    }
+
+    res.json({ message: `${result.affectedRows} inscription(s) soumise(s) avec succès au BUNEXE` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Erreur serveur lors de la soumission de la liste' });
+  }
+};
